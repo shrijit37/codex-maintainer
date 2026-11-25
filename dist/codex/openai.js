@@ -71,8 +71,12 @@ function conform(value, schema) {
             const first = citations[0] ?? {};
             if (Object.hasOwn(first, key))
                 raw = first[key];
+            if (Object.hasOwn(source, key))
+                raw = source[key];
+            if (raw === undefined && key === 'path')
+                raw = source['file'];
             if (raw === undefined && key === 'category')
-                raw = source['type'];
+                raw = source['type'] ?? 'improvement';
             if (raw === undefined && key === 'explanation')
                 raw = [source['trigger'], source['impact'], source['reason'], source['issue']].filter((x) => typeof x === 'string').join('\n');
             if (raw === undefined && key === 'recommendation')
