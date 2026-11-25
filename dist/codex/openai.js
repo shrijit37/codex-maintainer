@@ -18,9 +18,27 @@ export function createOfficialClient(apiKey, baseURL = process.env['CM_OPENAI_BA
     const OpenAI = constructor;
     return new OpenAI({ apiKey, baseURL, maxRetries: 2, timeout: 120_000, logLevel: 'off' });
 }
+function defaultFor(schema) {
+    const anyOf = schema['anyOf'];
+    if (Array.isArray(anyOf) && anyOf.length)
+        return defaultFor(anyOf[0]);
+    switch (schema['type']) {
+        case 'string': {
+            const min = typeof schema['minLength'] === 'number' ? schema['minLength'] : 0;
+            const max = typeof schema['maxLength'] === 'number' ? schema['maxLength'] : 20_000;
+            return 'Not specified by the model.'.padEnd(min, '.').slice(0, Math.max(min, max));
+        }
+        case 'integer':
+        case 'number': return typeof schema['minimum'] === 'number' ? schema['minimum'] : 0;
+        case 'boolean': return false;
+        case 'array': return [];
+        case 'object': return {};
+        default: return null;
+    }
+}
 // Some OpenAI-compatible gateways accept json_schema but still emit extra keys.
-// Drop unknown keys recursively before the strict local schema check so required
-// fields and bounds remain enforced without discarding an otherwise valid report.
+// Normalize known field aliases and drop unknown keys before the strict local
+// schema check so required fields and bounds remain enforced.
 function conform(value, schema) {
     if (Array.isArray(value) && schema['type'] === 'array') {
         const item = schema['items'];
@@ -30,10 +48,20 @@ function conform(value, schema) {
         const properties = schema['properties'];
         if (!properties || typeof properties !== 'object')
             return value;
+        const source = value;
         const result = {};
         for (const [key, child] of Object.entries(properties)) {
-            if (Object.hasOwn(value, key) && child && typeof child === 'object')
-                result[key] = conform(value[key], child);
+            if (!child || typeof child !== 'object')
+                continue;
+            const field = child;
+            let raw = Object.hasOwn(source, key) ? source[key] : undefined;
+            if (raw === undefined && key === 'explanation')
+                raw = [source['trigger'], source['impact'], source['reason']].filter((x) => typeof x === 'string').join('\n');
+            if (raw === undefined && key === 'recommendation')
+                raw = [source['remedy'], source['fix']].filter((x) => typeof x === 'string').join('\n');
+            if (raw === undefined)
+                raw = defaultFor(field);
+            result[key] = conform(raw, field);
         }
         return result;
     }
