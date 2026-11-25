@@ -80,6 +80,9 @@ export async function runAction(env = process.env) {
         if (value !== undefined)
             assembled[key] = value;
     }
+    const rawExcludes = env['CM_EXCLUDE_PATHS'];
+    if (rawExcludes)
+        assembled['excludePaths'] = rawExcludes.split(',').map((value) => value.trim()).filter(Boolean);
     const config = Object.keys(assembled).length ? assembled : undefined;
     const github = new GitHubClient(parseRepo(env['GITHUB_REPOSITORY'] ?? ''), token, { logger });
     const maintainer = new Maintainer(github, (config) => new OpenAIProvider(config, apiKey, [token, apiKey], logger), { logger, secrets: [token, apiKey], ...(model ? { model } : {}), ...(config ? { config } : {}) });

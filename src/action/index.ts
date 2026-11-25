@@ -50,7 +50,7 @@ export async function runAction(env: NodeJS.ProcessEnv = process.env): Promise<v
     if (!Number.isInteger(value) || value < min || value > max) throw new MaintainerError('CONFIG', `${name} must be an integer between ${min} and ${max}.`);
     return value;
   };
-  const assembled: Record<string, number> = {};
+  const assembled: Record<string, unknown> = {};
   for (const [key, envName, min, max] of [
     ['maxOutputTokens', 'CM_MAX_OUTPUT_TOKENS', 1_000, 24_000],
     ['maxDiffChars', 'CM_MAX_DIFF_CHARS', 1_000, 300_000],
@@ -62,6 +62,8 @@ export async function runAction(env: NodeJS.ProcessEnv = process.env): Promise<v
     const value = numberInput(envName, min, max);
     if (value !== undefined) assembled[key] = value;
   }
+  const rawExcludes = env['CM_EXCLUDE_PATHS'];
+  if (rawExcludes) assembled['excludePaths'] = rawExcludes.split(',').map((value) => value.trim()).filter(Boolean);
   const config = Object.keys(assembled).length ? assembled : undefined;
   const github = new GitHubClient(parseRepo(env['GITHUB_REPOSITORY'] ?? ''), token, { logger });
   const maintainer = new Maintainer(github, (config) => new OpenAIProvider(config, apiKey, [token, apiKey], logger), { logger, secrets: [token, apiKey], ...(model ? { model } : {}), ...(config ? { config } : {}) });
