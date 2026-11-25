@@ -4,7 +4,7 @@ import { MaintainerError } from '../core/errors.js';
 import { redact } from '../core/security.js';
 import { silentLogger } from '../core/logger.js';
 import { SYSTEM_POLICY } from './provider.js';
-export function createOfficialClient(apiKey, baseURL = process.env['CM_OPENAI_BASE_URL'] || 'https://api.openai.com/v1') {
+export function createOfficialClient(apiKey, baseURL = process.env['CM_OPENAI_BASE_URL'] || 'https://api.openai.com/v1', maxRetries = Number(process.env['CM_MAX_RETRIES'] ?? 2)) {
     let imported;
     try {
         imported = createRequire(import.meta.url)('openai');
@@ -16,7 +16,9 @@ export function createOfficialClient(apiKey, baseURL = process.env['CM_OPENAI_BA
     if (typeof constructor !== 'function')
         throw new MaintainerError('SDK_MISSING', 'The installed openai package does not expose its documented default constructor.');
     const OpenAI = constructor;
-    return new OpenAI({ apiKey, baseURL, maxRetries: 2, timeout: 120_000, logLevel: 'off' });
+    if (!Number.isInteger(maxRetries) || maxRetries < 0 || maxRetries > 10)
+        throw new MaintainerError('CONFIG', 'max-retries must be an integer between 0 and 10.');
+    return new OpenAI({ apiKey, baseURL, maxRetries, timeout: 120_000, logLevel: 'off' });
 }
 function defaultFor(schema) {
     const anyOf = schema['anyOf'];

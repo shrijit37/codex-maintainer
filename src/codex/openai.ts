@@ -11,14 +11,15 @@ export interface ResponsesClient {
   responses: { create(body: Record<string, unknown>, options?: { signal: AbortSignal }): Promise<unknown> };
 }
 export interface SdkOptions { apiKey: string; baseURL: string; maxRetries: number; timeout: number; logLevel: 'off' }
-export function createOfficialClient(apiKey: string, baseURL: string = process.env['CM_OPENAI_BASE_URL'] || 'https://api.openai.com/v1'): ResponsesClient {
+export function createOfficialClient(apiKey: string, baseURL: string = process.env['CM_OPENAI_BASE_URL'] || 'https://api.openai.com/v1', maxRetries = Number(process.env['CM_MAX_RETRIES'] ?? 2)): ResponsesClient {
   let imported: unknown;
   try { imported = createRequire(import.meta.url)('openai') as unknown; }
   catch { throw new MaintainerError('SDK_MISSING', 'The official openai package is not installed. Run npm install in the Codex Maintainer installation directory.'); }
   const constructor = typeof imported === 'function' ? imported : (typeof imported === 'object' && imported !== null && 'default' in imported ? imported.default : undefined);
   if (typeof constructor !== 'function') throw new MaintainerError('SDK_MISSING', 'The installed openai package does not expose its documented default constructor.');
   const OpenAI = constructor as new (options: SdkOptions) => ResponsesClient;
-  return new OpenAI({ apiKey, baseURL, maxRetries: 2, timeout: 120_000, logLevel: 'off' });
+  if (!Number.isInteger(maxRetries) || maxRetries < 0 || maxRetries > 10) throw new MaintainerError('CONFIG', 'max-retries must be an integer between 0 and 10.');
+  return new OpenAI({ apiKey, baseURL, maxRetries, timeout: 120_000, logLevel: 'off' });
 }
 
 function defaultFor(schema: Record<string, unknown>): unknown {
