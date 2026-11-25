@@ -31,6 +31,26 @@ inputs:
     description: Structured Outputs cap (1000-24000). Raise for high reasoning on slower gateways.
     required: false
     default: ''
+  max-diff-chars:
+    description: Diff evidence budget (1000-300000). Raise to review large PRs.
+    required: false
+    default: ''
+  max-files:
+    description: Maximum changed files reviewed (1-200).
+    required: false
+    default: ''
+  max-context-files:
+    description: Maximum source excerpts included (1-24).
+    required: false
+    default: ''
+  max-context-chars:
+    description: Total source excerpt budget (2000-150000).
+    required: false
+    default: ''
+  max-file-bytes:
+    description: Per-file source char cap (1000-100000).
+    required: false
+    default: ''
   verbose:
     description: Log request config, response status, token usage and redacted model JSON to the step log.
     required: false
@@ -89,6 +109,11 @@ runs:
         CM_OPENAI_BASE_URL: ${{ inputs.base-url }}
         CM_REASONING_EFFORT: ${{ inputs.reasoning-effort }}
         CM_MAX_OUTPUT_TOKENS: ${{ inputs.max-output-tokens }}
+        CM_MAX_DIFF_CHARS: ${{ inputs.max-diff-chars }}
+        CM_MAX_FILES: ${{ inputs.max-files }}
+        CM_MAX_CONTEXT_FILES: ${{ inputs.max-context-files }}
+        CM_MAX_CONTEXT_CHARS: ${{ inputs.max-context-chars }}
+        CM_MAX_FILE_BYTES: ${{ inputs.max-file-bytes }}
         CM_VERBOSE: ${{ inputs.verbose }}
         CM_ACTION_COMMENT: ${{ inputs.comment }}
         CM_ACTION_ALLOW_FORKS: ${{ inputs.allow-forks }}

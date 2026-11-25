@@ -58,11 +58,29 @@ export async function runAction(env = process.env) {
     const apiKey = requireSecret(env, 'OPENAI_API_KEY');
     const comment = booleanInput(env['CM_ACTION_COMMENT'], 'comment');
     const model = env['CM_ACTION_MODEL'] || env['CODEX_MAINTAINER_MODEL'];
-    const rawTokens = env['CM_MAX_OUTPUT_TOKENS'];
-    const maxTokens = rawTokens ? Number(rawTokens) : undefined;
-    if (maxTokens !== undefined && (!Number.isInteger(maxTokens) || maxTokens < 1_000 || maxTokens > 24_000))
-        throw new MaintainerError('CONFIG', 'max-output-tokens must be an integer between 1000 and 24000.');
-    const config = maxTokens === undefined ? undefined : { maxOutputTokens: maxTokens };
+    const numberInput = (name, min, max) => {
+        const raw = env[name];
+        if (!raw)
+            return undefined;
+        const value = Number(raw);
+        if (!Number.isInteger(value) || value < min || value > max)
+            throw new MaintainerError('CONFIG', `${name} must be an integer between ${min} and ${max}.`);
+        return value;
+    };
+    const assembled = {};
+    for (const [key, envName, min, max] of [
+        ['maxOutputTokens', 'CM_MAX_OUTPUT_TOKENS', 1_000, 24_000],
+        ['maxDiffChars', 'CM_MAX_DIFF_CHARS', 1_000, 300_000],
+        ['maxFiles', 'CM_MAX_FILES', 1, 200],
+        ['maxContextFiles', 'CM_MAX_CONTEXT_FILES', 1, 24],
+        ['maxContextChars', 'CM_MAX_CONTEXT_CHARS', 2_000, 150_000],
+        ['maxFileBytes', 'CM_MAX_FILE_BYTES', 1_000, 100_000],
+    ]) {
+        const value = numberInput(envName, min, max);
+        if (value !== undefined)
+            assembled[key] = value;
+    }
+    const config = Object.keys(assembled).length ? assembled : undefined;
     const github = new GitHubClient(parseRepo(env['GITHUB_REPOSITORY'] ?? ''), token, { logger });
     const maintainer = new Maintainer(github, (config) => new OpenAIProvider(config, apiKey, [token, apiKey], logger), { logger, secrets: [token, apiKey], ...(model ? { model } : {}), ...(config ? { config } : {}) });
     const execution = decision.task === 'triage' ? await maintainer.triage(decision.number) : await maintainer.review(decision.number);

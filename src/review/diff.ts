@@ -40,9 +40,12 @@ export function parseDiff(patch: string): ParsedDiff {
 }
 
 function priority(file: ChangedFile): number {
-  if (/auth|security|permission|crypto|session|payment|migrat/i.test(file.filename)) return 10;
-  if (/\.(?:[cm]?js|[cm]?ts|tsx|jsx|py|go|rs|java|php|rb|c|cpp|cs)$/.test(file.filename)) return 5;
-  return 0;
+  // Live code first: Kotlin is this repo's main language, and deletions should
+  // never crowd out modified files that still have executable source to review.
+  const risk = /auth|security|permission|crypto|session|payment|migrat/i.test(file.filename) ? 5 : 0;
+  const code = /\.(?:[cm]?js|[cm]?ts|tsx|jsx|py|go|rs|java|kt|kts|php|rb|c|cpp|cs)$/.test(file.filename) ? 4 : 0;
+  const state = file.status === 'modified' || file.status === 'added' ? 1 : file.status === 'removed' ? -1 : 0;
+  return risk + code + state;
 }
 
 export function prepareDiff(changes: readonly ChangedFile[], totalFiles: number, apiTruncated: boolean, config: Config, secrets: readonly string[] = []): PreparedDiff {
