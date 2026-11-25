@@ -15,6 +15,10 @@ inputs:
     description: Override the configured OpenAI Responses model. Default is gpt-5.3-codex.
     required: false
     default: ''
+  pr-number:
+    description: Explicit PR number to review (for workflow_dispatch). When set, the event payload is not used for task selection.
+    required: false
+    default: ''
   base-url:
     description: OpenAI-compatible Responses API base URL. Empty uses https://api.openai.com/v1.
     required: false
@@ -73,6 +77,7 @@ runs:
         OPENAI_API_KEY: ${{ inputs.openai-api-key }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
         CM_ACTION_MODEL: ${{ inputs.model }}
+        CM_ACTION_PR_NUMBER: ${{ inputs.pr-number }}
         CM_OPENAI_BASE_URL: ${{ inputs.base-url }}
         CM_REASONING_EFFORT: ${{ inputs.reasoning-effort }}
         CM_ACTION_COMMENT: ${{ inputs.comment }}

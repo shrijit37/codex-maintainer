@@ -23,9 +23,15 @@ export async function runAction(env: NodeJS.ProcessEnv = process.env): Promise<v
   let payload: unknown;
   try { payload = JSON.parse(await readBounded(eventPath, 2_000_000)) as unknown; }
   catch (error) { if (error instanceof MaintainerError) throw error; throw new MaintainerError('CONFIG', 'Invalid GitHub event JSON.'); }
-  const decision = decideAction(env['GITHUB_EVENT_NAME'] ?? '', payload, env['GITHUB_REPOSITORY'] ?? '', {
-    allowForks: booleanInput(env['CM_ACTION_ALLOW_FORKS'], 'allow-forks'), allowExternalIssues: booleanInput(env['CM_ACTION_ALLOW_EXTERNAL_ISSUES'], 'allow-external-issues'),
-  });
+  const explicitPr = env['CM_ACTION_PR_NUMBER'];
+  const decision = explicitPr
+    ? (() => {
+        if (!/^[1-9][0-9]*$/.test(explicitPr)) throw new MaintainerError('CONFIG', 'pr-number must be a positive integer.');
+        return { task: 'review' as const, number: Number(explicitPr), reason: null };
+      })()
+    : decideAction(env['GITHUB_EVENT_NAME'] ?? '', payload, env['GITHUB_REPOSITORY'] ?? '', {
+        allowForks: booleanInput(env['CM_ACTION_ALLOW_FORKS'], 'allow-forks'), allowExternalIssues: booleanInput(env['CM_ACTION_ALLOW_EXTERNAL_ISSUES'], 'allow-external-issues'),
+      });
   const logger = createLogger([env['OPENAI_API_KEY'] ?? '', env['GITHUB_TOKEN'] ?? '']);
   if (!decision.task || decision.number === null) { logger.info(decision.reason ?? 'Event skipped.'); await output(env, 'status', 'skipped'); return; }
   if (!env['OPENAI_API_KEY']?.trim() && (env['GITHUB_ACTOR'] === 'dependabot[bot]' || (env['CM_ACTION_ALLOW_FORKS'] === 'true' && env['GITHUB_EVENT_NAME'] === 'pull_request'))) {
