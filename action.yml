@@ -31,6 +31,10 @@ inputs:
     description: Structured Outputs cap (1000-24000). Raise for high reasoning on slower gateways.
     required: false
     default: ''
+  verbose:
+    description: Log request config, response status, token usage and redacted model JSON to the step log.
+    required: false
+    default: 'false'
   comment:
     description: Explicitly create or update one recommendation comment; never approve, merge, close or modify files.
     required: false
@@ -85,6 +89,7 @@ runs:
         CM_OPENAI_BASE_URL: ${{ inputs.base-url }}
         CM_REASONING_EFFORT: ${{ inputs.reasoning-effort }}
         CM_MAX_OUTPUT_TOKENS: ${{ inputs.max-output-tokens }}
+        CM_VERBOSE: ${{ inputs.verbose }}
         CM_ACTION_COMMENT: ${{ inputs.comment }}
         CM_ACTION_ALLOW_FORKS: ${{ inputs.allow-forks }}
         CM_ACTION_ALLOW_EXTERNAL_ISSUES: ${{ inputs.allow-external-issues }}

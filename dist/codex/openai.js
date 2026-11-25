@@ -60,13 +60,16 @@ export class OpenAIProvider {
         this.client = client ?? createOfficialClient(apiKey);
     }
     async complete(task, schema, evidence) {
+        const verbose = process.env['CM_VERBOSE'] === 'true';
         const input = redact(JSON.stringify({ task, untrustedEvidence: evidence }), this.secrets);
         if (input.length > 500_000)
             throw new MaintainerError('LIMIT', 'The assembled prompt exceeds its character budget. Lower the configured limits.');
         const effort = process.env['CM_REASONING_EFFORT'] || 'high';
         if (!['minimal', 'low', 'medium', 'high', 'xhigh'].includes(effort))
             throw new MaintainerError('CONFIG', 'Invalid reasoning effort.');
-        this.logger.info(`Requesting structured ${task} analysis with ${this.config.model}.`);
+        this.logger.info(`Requesting structured ${task} analysis with ${this.config.model} (effort=${effort}, maxOutputTokens=${this.config.maxOutputTokens}, baseURL=${process.env['CM_OPENAI_BASE_URL'] || 'https://api.openai.com/v1'}).`);
+        if (verbose)
+            this.logger.info(`[verbose] prompt chars=${input.length}; required fields=${JSON.stringify(schema.json['required'] ?? [])}`);
         const required = schema.json['required'];
         const hint = Array.isArray(required) ? ` Return only the requested JSON object with exactly these top-level fields: ${required.join(', ')}.` : '';
         try {
@@ -77,6 +80,8 @@ export class OpenAIProvider {
                 max_output_tokens: this.config.maxOutputTokens,
             }, { signal: AbortSignal.timeout(180_000) });
             const response = responseSchema.parse(raw);
+            if (verbose)
+                this.logger.info(`[verbose] response status=${response.status}; item types=${JSON.stringify(response.output.map((item) => item.type))}; usage=${JSON.stringify(response.usage)}; requestId=${response._request_id ?? 'none'}`);
             const messages = response.output.filter((item) => item.type === 'message');
             if (messages.some((message) => message.content.some((part) => part.type === 'refusal')))
                 throw new MaintainerError('REFUSAL', 'The model declined this request. No comment was published.');
@@ -88,6 +93,8 @@ export class OpenAIProvider {
             const selected = finals.length ? finals : messages;
             const extracted = selected.flatMap((item) => item.content.filter((part) => part.type === 'output_text').map((part) => part.text)).join('');
             const text = redact(extracted || response.output_text, this.secrets);
+            if (verbose)
+                this.logger.info(`[verbose] model JSON: ${text.slice(0, 2000)}`);
             let parsed;
             try {
                 parsed = JSON.parse(text);
