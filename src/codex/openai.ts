@@ -53,6 +53,10 @@ function conform(value: unknown, schema: Record<string, unknown>): unknown {
   }
   if (value !== null && typeof value === 'object' && !Array.isArray(value) && schema['type'] === 'object') {
     const properties = schema['properties'];
+    if (properties && Object.hasOwn(properties, 'summary') && !Object.hasOwn(value as object, 'summary')) {
+      const parts = Object.values(value as Record<string, unknown>).filter((x) => typeof x === 'string');
+      if (parts.length) return conform({ ...(value as object), summary: parts.join('\n\n') }, schema);
+    }
     if (!properties || typeof properties !== 'object') return value;
     const source = value as Record<string, unknown>;
     const result: Record<string, unknown> = {};
@@ -60,12 +64,18 @@ function conform(value: unknown, schema: Record<string, unknown>): unknown {
       if (!child || typeof child !== 'object') continue;
       const field = child as Record<string, unknown>;
       let raw = Object.hasOwn(source, key) ? source[key] : undefined;
+      const citations = Array.isArray(source['citations']) ? source['citations'] as Record<string, unknown>[] : [];
+      const first = citations[0] ?? {};
+      if (Object.hasOwn(first, key)) raw = first[key];
+      if (raw === undefined && key === 'category') raw = source['type'];
+      if (raw === undefined && key === 'explanation') raw = [source['trigger'], source['impact'], source['reason'], source['issue']].filter((x) => typeof x === 'string').join('\n');
+      if (raw === undefined && key === 'recommendation') raw = [source['remedy'], source['fix']].filter((x) => typeof x === 'string').join('\n');
+      if (raw === undefined && key === 'confidence') raw = 'medium';
       // A finding without a changed-line citation is not a finding: drop the
       // whole object rather than filling in a fabricated location or category.
       const locationKeys = ['path', 'side', 'line', 'quote', 'category', 'severity', 'confidence'];
       if (raw === undefined && locationKeys.includes(key) && Array.isArray(schema['required']) && (schema['required'] as unknown[]).includes(key)) return undefined;
-      if (raw === undefined && key === 'explanation') raw = [source['trigger'], source['impact'], source['reason'], source['issue']].filter((x) => typeof x === 'string').join('\n');
-      if (raw === undefined && key === 'recommendation') raw = [source['remedy'], source['fix']].filter((x) => typeof x === 'string').join('\n');
+      if (Array.isArray(field['enum']) && !field['enum'].includes(raw)) return undefined;
       if (raw === undefined) raw = defaultFor(field);
       if (raw === undefined) return undefined;
       result[key] = conform(raw, field);
