@@ -81,7 +81,9 @@ export class OpenAIProvider implements AIProvider {
       const text = redact(extracted || response.output_text, this.secrets);
       let parsed: unknown;
       try { parsed = JSON.parse(text) as unknown; } catch { throw new MaintainerError('MODEL_OUTPUT', 'The model did not return valid JSON. No comment was published.'); }
-      const value = parseJson(JSON.stringify(conform(parsed, schema.json as Record<string, unknown>)), schema, true);
+      let value: T;
+      try { value = parseJson(JSON.stringify(conform(parsed, schema.json as Record<string, unknown>)), schema, true); }
+      catch { throw new MaintainerError('MODEL_OUTPUT', `The model JSON did not match the required schema. Received: ${text.slice(0, 1200)}`); }
       return { value, provider: 'openai', model: this.config.model, usage: response.usage ? { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens } : null, requestId: response._request_id };
     } catch (error) {
       if (error instanceof MaintainerError) {
