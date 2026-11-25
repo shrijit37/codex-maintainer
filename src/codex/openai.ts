@@ -86,6 +86,9 @@ export class OpenAIProvider implements AIProvider {
     if (input.length > 500_000) throw new MaintainerError('LIMIT', 'The assembled prompt exceeds its character budget. Lower the configured limits.');
     const effort = process.env['CM_REASONING_EFFORT'] || 'high';
     if (!['minimal', 'low', 'medium', 'high', 'xhigh'].includes(effort)) throw new MaintainerError('CONFIG', 'Invalid reasoning effort.');
+    const rawTimeout = process.env['CM_REQUEST_TIMEOUT_MS'];
+    const requestTimeout = rawTimeout ? Number(rawTimeout) : 180_000;
+    if (!Number.isInteger(requestTimeout) || requestTimeout < 1_000 || requestTimeout > 900_000) throw new MaintainerError('CONFIG', 'request-timeout-ms must be an integer between 1000 and 900000.');
     this.logger.info(`Requesting structured ${task} analysis with ${this.config.model} (effort=${effort}, maxOutputTokens=${this.config.maxOutputTokens}, baseURL=${process.env['CM_OPENAI_BASE_URL'] || 'https://api.openai.com/v1'}).`);
     if (verbose) this.logger.info(`[verbose] prompt chars=${input.length}; required fields=${JSON.stringify((schema.json as Record<string, unknown>)['required'] ?? [])}`);
     const required = (schema.json as Record<string, unknown>)['required'];
@@ -96,7 +99,7 @@ export class OpenAIProvider implements AIProvider {
         input: [{ role: 'system', content: SYSTEM_POLICY + hint }, { role: 'user', content: input }],
         text: { format: { type: 'json_schema', name: `codex_maintainer_${task}`, strict: true, schema: schema.json } },
         max_output_tokens: this.config.maxOutputTokens,
-      }, { signal: AbortSignal.timeout(180_000) });
+      }, { signal: AbortSignal.timeout(requestTimeout) });
       const response = responseSchema.parse(raw);
       if (verbose) this.logger.info(`[verbose] response status=${response.status}; item types=${JSON.stringify(response.output.map((item) => item.type))}; usage=${JSON.stringify(response.usage)}; requestId=${response._request_id ?? 'none'}`);
       const messages = response.output.filter((item) => item.type === 'message');

@@ -51,6 +51,10 @@ inputs:
     description: Per-file source char cap (1000-100000).
     required: false
     default: ''
+  request-timeout-ms:
+    description: Per-request timeout in milliseconds (1000-900000). Raise for large prompts on slow gateways.
+    required: false
+    default: ''
   verbose:
     description: Log request config, response status, token usage and redacted model JSON to the step log.
     required: false
@@ -114,6 +118,7 @@ runs:
         CM_MAX_CONTEXT_FILES: ${{ inputs.max-context-files }}
         CM_MAX_CONTEXT_CHARS: ${{ inputs.max-context-chars }}
         CM_MAX_FILE_BYTES: ${{ inputs.max-file-bytes }}
+        CM_REQUEST_TIMEOUT_MS: ${{ inputs.request-timeout-ms }}
         CM_VERBOSE: ${{ inputs.verbose }}
         CM_ACTION_COMMENT: ${{ inputs.comment }}
         CM_ACTION_ALLOW_FORKS: ${{ inputs.allow-forks }}
