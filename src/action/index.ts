@@ -43,8 +43,12 @@ export async function runAction(env: NodeJS.ProcessEnv = process.env): Promise<v
   const apiKey = requireSecret(env, 'OPENAI_API_KEY');
   const comment = booleanInput(env['CM_ACTION_COMMENT'], 'comment');
   const model = env['CM_ACTION_MODEL'] || env['CODEX_MAINTAINER_MODEL'];
+  const rawTokens = env['CM_MAX_OUTPUT_TOKENS'];
+  const maxTokens = rawTokens ? Number(rawTokens) : undefined;
+  if (maxTokens !== undefined && (!Number.isInteger(maxTokens) || maxTokens < 1_000 || maxTokens > 24_000)) throw new MaintainerError('CONFIG', 'max-output-tokens must be an integer between 1000 and 24000.');
+  const config = maxTokens === undefined ? undefined : { maxOutputTokens: maxTokens };
   const github = new GitHubClient(parseRepo(env['GITHUB_REPOSITORY'] ?? ''), token, { logger });
-  const maintainer = new Maintainer(github, (config) => new OpenAIProvider(config, apiKey, [token, apiKey], logger), { logger, secrets: [token, apiKey], ...(model ? { model } : {}) });
+  const maintainer = new Maintainer(github, (config) => new OpenAIProvider(config, apiKey, [token, apiKey], logger), { logger, secrets: [token, apiKey], ...(model ? { model } : {}), ...(config ? { config } : {}) });
   const execution = decision.task === 'triage' ? await maintainer.triage(decision.number) : await maintainer.review(decision.number);
   const temp = env['RUNNER_TEMP'];
   if (!temp) throw new MaintainerError('CONFIG', 'RUNNER_TEMP is required.');

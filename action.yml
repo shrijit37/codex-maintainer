@@ -27,6 +27,10 @@ inputs:
     description: Responses reasoning effort (minimal, low, medium, high, xhigh).
     required: false
     default: 'high'
+  max-output-tokens:
+    description: Structured Outputs cap (1000-24000). Raise for high reasoning on slower gateways.
+    required: false
+    default: ''
   comment:
     description: Explicitly create or update one recommendation comment; never approve, merge, close or modify files.
     required: false
@@ -80,6 +84,7 @@ runs:
         CM_ACTION_PR_NUMBER: ${{ inputs.pr-number }}
         CM_OPENAI_BASE_URL: ${{ inputs.base-url }}
         CM_REASONING_EFFORT: ${{ inputs.reasoning-effort }}
+        CM_MAX_OUTPUT_TOKENS: ${{ inputs.max-output-tokens }}
         CM_ACTION_COMMENT: ${{ inputs.comment }}
         CM_ACTION_ALLOW_FORKS: ${{ inputs.allow-forks }}
         CM_ACTION_ALLOW_EXTERNAL_ISSUES: ${{ inputs.allow-external-issues }}
