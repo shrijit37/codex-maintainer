@@ -30,7 +30,8 @@ test('final_answer phase is used instead of intermediate commentary', async () =
   assert.equal(result.value.ok, true);
 });
 test('invalid JSON, wrong output schema and unexpected SDK envelope are rejected', async () => {
-  for (const raw of [envelope('{'), envelope('{}'), envelope('{"ok":true,"extra":"unsafe"}'), envelope('```json\n{"ok":true}\n```'), { status: 3 }]) await assert.rejects(provider(async () => raw).complete('review', schema, {}), code('MODEL_OUTPUT'));
+  for (const raw of [envelope('{'), envelope('{}'), envelope('```json\n{"ok":true}\n```'), { status: 3 }]) await assert.rejects(provider(async () => raw).complete('review', schema, {}), code('MODEL_OUTPUT'));
+  assert.equal((await provider(async () => envelope('{"ok":true,"extra":"unsafe"}')).complete('review', schema, {})).value.ok, true);
 });
 test('refusals, incomplete output and tool output are rejected before publication', async () => {
   await assert.rejects(provider(async () => envelope('', { output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'No' }] }] })).complete('review', schema, {}), code('REFUSAL'));

@@ -18,6 +18,27 @@ export function createOfficialClient(apiKey, baseURL = process.env['CM_OPENAI_BA
     const OpenAI = constructor;
     return new OpenAI({ apiKey, baseURL, maxRetries: 2, timeout: 120_000, logLevel: 'off' });
 }
+// Some OpenAI-compatible gateways accept json_schema but still emit extra keys.
+// Drop unknown keys recursively before the strict local schema check so required
+// fields and bounds remain enforced without discarding an otherwise valid report.
+function conform(value, schema) {
+    if (Array.isArray(value) && schema['type'] === 'array') {
+        const item = schema['items'];
+        return item && typeof item === 'object' ? value.map((entry) => conform(entry, item)) : value;
+    }
+    if (value !== null && typeof value === 'object' && !Array.isArray(value) && schema['type'] === 'object') {
+        const properties = schema['properties'];
+        if (!properties || typeof properties !== 'object')
+            return value;
+        const result = {};
+        for (const [key, child] of Object.entries(properties)) {
+            if (Object.hasOwn(value, key) && child && typeof child === 'object')
+                result[key] = conform(value[key], child);
+        }
+        return result;
+    }
+    return value;
+}
 const contentSchema = s.object({ type: s.string(100), text: s.optional(s.string(500_000), ''), refusal: s.optional(s.string(20_000), '') }, false);
 const responseSchema = s.object({
     status: s.string(100), output_text: s.optional(s.string(500_000), ''),
@@ -46,10 +67,12 @@ export class OpenAIProvider {
         if (!['minimal', 'low', 'medium', 'high', 'xhigh'].includes(effort))
             throw new MaintainerError('CONFIG', 'Invalid reasoning effort.');
         this.logger.info(`Requesting structured ${task} analysis with ${this.config.model}.`);
+        const required = schema.json['required'];
+        const hint = Array.isArray(required) ? ` Return only the requested JSON object with exactly these top-level fields: ${required.join(', ')}.` : '';
         try {
             const raw = await this.client.responses.create({
                 model: this.config.model, store: false, reasoning: { effort },
-                input: [{ role: 'system', content: SYSTEM_POLICY }, { role: 'user', content: input }],
+                input: [{ role: 'system', content: SYSTEM_POLICY + hint }, { role: 'user', content: input }],
                 text: { format: { type: 'json_schema', name: `codex_maintainer_${task}`, strict: true, schema: schema.json } },
                 max_output_tokens: this.config.maxOutputTokens,
             }, { signal: AbortSignal.timeout(180_000) });
@@ -64,7 +87,15 @@ export class OpenAIProvider {
             const finals = messages.filter((item) => item.phase === 'final_answer');
             const selected = finals.length ? finals : messages;
             const extracted = selected.flatMap((item) => item.content.filter((part) => part.type === 'output_text').map((part) => part.text)).join('');
-            const value = parseJson(redact(extracted || response.output_text, this.secrets), schema, true);
+            const text = redact(extracted || response.output_text, this.secrets);
+            let parsed;
+            try {
+                parsed = JSON.parse(text);
+            }
+            catch {
+                throw new MaintainerError('MODEL_OUTPUT', 'The model did not return valid JSON. No comment was published.');
+            }
+            const value = parseJson(JSON.stringify(conform(parsed, schema.json)), schema, true);
             return { value, provider: 'openai', model: this.config.model, usage: response.usage ? { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens } : null, requestId: response._request_id };
         }
         catch (error) {
