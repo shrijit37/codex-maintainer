@@ -11,14 +11,14 @@ export interface ResponsesClient {
   responses: { create(body: Record<string, unknown>, options?: { signal: AbortSignal }): Promise<unknown> };
 }
 export interface SdkOptions { apiKey: string; baseURL: string; maxRetries: number; timeout: number; logLevel: 'off' }
-export function createOfficialClient(apiKey: string): ResponsesClient {
+export function createOfficialClient(apiKey: string, baseURL: string = process.env['CM_OPENAI_BASE_URL'] || 'https://api.openai.com/v1'): ResponsesClient {
   let imported: unknown;
   try { imported = createRequire(import.meta.url)('openai') as unknown; }
   catch { throw new MaintainerError('SDK_MISSING', 'The official openai package is not installed. Run npm install in the Codex Maintainer installation directory.'); }
   const constructor = typeof imported === 'function' ? imported : (typeof imported === 'object' && imported !== null && 'default' in imported ? imported.default : undefined);
   if (typeof constructor !== 'function') throw new MaintainerError('SDK_MISSING', 'The installed openai package does not expose its documented default constructor.');
   const OpenAI = constructor as new (options: SdkOptions) => ResponsesClient;
-  return new OpenAI({ apiKey, baseURL: 'https://api.openai.com/v1', maxRetries: 2, timeout: 120_000, logLevel: 'off' });
+  return new OpenAI({ apiKey, baseURL, maxRetries: 2, timeout: 120_000, logLevel: 'off' });
 }
 
 const contentSchema = s.object({ type: s.string(100), text: s.optional(s.string(500_000), ''), refusal: s.optional(s.string(20_000), '') }, false);
@@ -38,10 +38,12 @@ export class OpenAIProvider implements AIProvider {
   async complete<T>(task: Task, schema: Schema<T>, evidence: unknown): Promise<AIResult<T>> {
     const input = redact(JSON.stringify({ task, untrustedEvidence: evidence }), this.secrets);
     if (input.length > 500_000) throw new MaintainerError('LIMIT', 'The assembled prompt exceeds its character budget. Lower the configured limits.');
+    const effort = process.env['CM_REASONING_EFFORT'] || 'high';
+    if (!['minimal', 'low', 'medium', 'high', 'xhigh'].includes(effort)) throw new MaintainerError('CONFIG', 'Invalid reasoning effort.');
     this.logger.info(`Requesting structured ${task} analysis with ${this.config.model}.`);
     try {
       const raw = await this.client.responses.create({
-        model: this.config.model, store: false,
+        model: this.config.model, store: false, reasoning: { effort },
         input: [{ role: 'system', content: SYSTEM_POLICY }, { role: 'user', content: input }],
         text: { format: { type: 'json_schema', name: `codex_maintainer_${task}`, strict: true, schema: schema.json } },
         max_output_tokens: this.config.maxOutputTokens,

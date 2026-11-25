@@ -11,7 +11,7 @@ const provider = (create: ResponsesClient['responses']['create']) => new OpenAIP
 test('adapter sends a Responses request with strict output schema, no tools, no response storage and redacted evidence', async () => {
   let calls = 0;
   const instance = provider(async (body, options) => {
-    calls++; assert.equal(body['model'], 'gpt-5.3-codex'); assert.equal(body['store'], false); assert.equal(body['tools'], undefined);
+    calls++; assert.equal(body['model'], 'gpt-5.3-codex'); assert.equal(body['store'], false); assert.equal(body['tools'], undefined); assert.deepEqual(body['reasoning'], { effort: 'high' });
     const text = body['text'] as { format: { type: string; strict: boolean; schema: unknown } };
     assert.equal(text.format.type, 'json_schema'); assert.equal(text.format.strict, true); assert.deepEqual(text.format.schema, schema.json);
     assert.ok(options?.signal); assert.ok(!JSON.stringify(body).includes('exact-private-key')); assert.match(JSON.stringify(body), /untrustedEvidence/);

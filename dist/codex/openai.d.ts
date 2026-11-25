@@ -17,7 +17,7 @@ export interface SdkOptions {
     timeout: number;
     logLevel: 'off';
 }
-export declare function createOfficialClient(apiKey: string): ResponsesClient;
+export declare function createOfficialClient(apiKey: string, baseURL?: string): ResponsesClient;
 export declare class OpenAIProvider implements AIProvider {
     private readonly config;
     private readonly secrets;

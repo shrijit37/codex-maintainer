@@ -4,7 +4,7 @@ import { MaintainerError } from '../core/errors.js';
 import { redact } from '../core/security.js';
 import { silentLogger } from '../core/logger.js';
 import { SYSTEM_POLICY } from './provider.js';
-export function createOfficialClient(apiKey) {
+export function createOfficialClient(apiKey, baseURL = process.env['CM_OPENAI_BASE_URL'] || 'https://api.openai.com/v1') {
     let imported;
     try {
         imported = createRequire(import.meta.url)('openai');
@@ -16,7 +16,7 @@ export function createOfficialClient(apiKey) {
     if (typeof constructor !== 'function')
         throw new MaintainerError('SDK_MISSING', 'The installed openai package does not expose its documented default constructor.');
     const OpenAI = constructor;
-    return new OpenAI({ apiKey, baseURL: 'https://api.openai.com/v1', maxRetries: 2, timeout: 120_000, logLevel: 'off' });
+    return new OpenAI({ apiKey, baseURL, maxRetries: 2, timeout: 120_000, logLevel: 'off' });
 }
 const contentSchema = s.object({ type: s.string(100), text: s.optional(s.string(500_000), ''), refusal: s.optional(s.string(20_000), '') }, false);
 const responseSchema = s.object({
@@ -42,10 +42,13 @@ export class OpenAIProvider {
         const input = redact(JSON.stringify({ task, untrustedEvidence: evidence }), this.secrets);
         if (input.length > 500_000)
             throw new MaintainerError('LIMIT', 'The assembled prompt exceeds its character budget. Lower the configured limits.');
+        const effort = process.env['CM_REASONING_EFFORT'] || 'high';
+        if (!['minimal', 'low', 'medium', 'high', 'xhigh'].includes(effort))
+            throw new MaintainerError('CONFIG', 'Invalid reasoning effort.');
         this.logger.info(`Requesting structured ${task} analysis with ${this.config.model}.`);
         try {
             const raw = await this.client.responses.create({
-                model: this.config.model, store: false,
+                model: this.config.model, store: false, reasoning: { effort },
                 input: [{ role: 'system', content: SYSTEM_POLICY }, { role: 'user', content: input }],
                 text: { format: { type: 'json_schema', name: `codex_maintainer_${task}`, strict: true, schema: schema.json } },
                 max_output_tokens: this.config.maxOutputTokens,
