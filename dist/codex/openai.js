@@ -22,6 +22,9 @@ function defaultFor(schema) {
     const anyOf = schema['anyOf'];
     if (Array.isArray(anyOf) && anyOf.length)
         return defaultFor(anyOf[0]);
+    // Never invent a category, severity, confidence or changed-line citation.
+    if (Array.isArray(schema['enum']))
+        return undefined;
     switch (schema['type']) {
         case 'string': {
             const min = typeof schema['minLength'] === 'number' ? schema['minLength'] : 0;
@@ -42,7 +45,9 @@ function defaultFor(schema) {
 function conform(value, schema) {
     if (Array.isArray(value) && schema['type'] === 'array') {
         const item = schema['items'];
-        return item && typeof item === 'object' ? value.map((entry) => conform(entry, item)) : value;
+        if (!item || typeof item !== 'object')
+            return value;
+        return value.map((entry) => conform(entry, item)).filter((entry) => entry !== undefined);
     }
     if (value !== null && typeof value === 'object' && !Array.isArray(value) && schema['type'] === 'object') {
         const properties = schema['properties'];
@@ -55,12 +60,19 @@ function conform(value, schema) {
                 continue;
             const field = child;
             let raw = Object.hasOwn(source, key) ? source[key] : undefined;
+            // A finding without a changed-line citation is not a finding: drop the
+            // whole object rather than filling in a fabricated location or category.
+            const locationKeys = ['path', 'side', 'line', 'quote', 'category', 'severity', 'confidence'];
+            if (raw === undefined && locationKeys.includes(key) && Array.isArray(schema['required']) && schema['required'].includes(key))
+                return undefined;
             if (raw === undefined && key === 'explanation')
-                raw = [source['trigger'], source['impact'], source['reason']].filter((x) => typeof x === 'string').join('\n');
+                raw = [source['trigger'], source['impact'], source['reason'], source['issue']].filter((x) => typeof x === 'string').join('\n');
             if (raw === undefined && key === 'recommendation')
                 raw = [source['remedy'], source['fix']].filter((x) => typeof x === 'string').join('\n');
             if (raw === undefined)
                 raw = defaultFor(field);
+            if (raw === undefined)
+                return undefined;
             result[key] = conform(raw, field);
         }
         return result;
